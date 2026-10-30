@@ -253,6 +253,8 @@ select.rst{width:auto;font-size:12px;font-weight:600;padding:3px 6px;border-radi
 .okm{color:#1a7f37;font-weight:600}
 .st.multi{background:var(--warn-bg);color:var(--warn)} .st.none,.st.dup{background:var(--err-bg);color:var(--err)} .st.skip{background:#eef1f4;color:var(--mut)}
 .applybar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--bd);padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:5}
+.sti .pn{font-size:14px;color:var(--fg);word-break:break-all;margin-top:-3px} .sti .pn span{color:var(--mut);font-size:12px;margin-right:6px}
+@media (max-width:760px){ .sti .pn{font-size:15px} }
 .sti .rd{font-size:12.5px;color:#0969da;font-weight:600}
 table.pur{min-width:1180px}
 @media (max-width:760px){ .mc .mb2{grid-template-columns:1fr} .mc .mm{border-right:0;border-bottom:1px solid var(--bd2)} }
@@ -266,11 +268,11 @@ table.pur{min-width:1180px}
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/><path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>앱 설치</button>
 </div></header>
 <nav class="tabs" id="tabs">
-  <button type="button" data-tab="stat" class="on">처리현황</button>
-  <button type="button" data-tab="msg">메시지 반영</button>
+  <button type="button" data-tab="msg" class="on">메시지 반영</button>
+  <button type="button" data-tab="stat">처리현황</button>
   <button type="button" data-tab="sync">시트 동기화<span class="badge" id="syncBadge" style="display:none"></span></button>
 </nav>
-<main id="tab-stat">
+<main id="tab-stat" style="display:none">
   <section class="box">
     <div class="box-h"><h2>부적합 처리현황</h2><span class="mut" id="stInfo">불러오는 중…</span>
       <button class="btn sm" id="stSync" style="margin-left:auto">지금 동기화</button></div>
@@ -286,7 +288,7 @@ table.pur{min-width:1180px}
     </div>
   </section>
 </main>
-<main id="tab-msg" style="display:none">
+<main id="tab-msg">
   <section class="box">
     <div class="box-h"><h2>메시지 붙여넣기</h2><span class="mut">받은 부적합 메시지를 붙여넣으면 처리현황에서 해당 건을 찾아요 (여러 건 한 번에 가능)</span></div>
     <div class="box-b">
@@ -709,6 +711,7 @@ function stRender(){
       <div class="t1">${st}${r.act ? `<span class="act">${esc(r.act)}</span>` : ''}${btn}</div>
       ${who ? `<div class="who">${who}</div>` : ''}${S.pur[r.no] ? `<div class="rd">재납일 ${esc(S.pur[r.no].redate)} · ${esc(PUR_ST[S.pur[r.no].state] || '')}</div>` : ''}
       <div class="nm">${esc(r.name || '(품명 없음)')}</div>
+      <div class="pn"><span>품번</span>${esc(r.pn || '-')}</div>
       <div class="df">${r.s ? `<span class="tg">${esc(r.s)}</span>` : ''}<span>${esc(r.text || '')}</span></div>
       <div class="mt">No ${esc(r.no)} · ${esc(r.date || '-')} · 귀책 ${esc(r.vendor || '-')} · 발견 ${esc(r.finder || '-')} · 담당 ${esc(r.owner || '-')}</div>
       ${r.ps ? `<div class="ps">비고 · ${esc(r.ps)}</div>` : ''}</div>`; };
@@ -993,7 +996,7 @@ const _stWho = stWhoRender; stWhoRender = function(){ _stWho(); const m = $('#mW
 setStatus();
 loadNames().then(() => stWhoRender());
 purLoad();
-showTab(store.get('pur_tab', 'stat'));
+showTab(store.get('pur_tab', 'msg'));
 </script>
 </body>
 </html>
