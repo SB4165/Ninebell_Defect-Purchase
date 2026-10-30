@@ -361,6 +361,7 @@ const ymdOf = s => { const m = String(s||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,
 const colL = j => { let s = ''; j++; while (j > 0) { const m = (j - 1) % 26; s = String.fromCharCode(65 + m) + s; j = Math.floor((j - 1) / 26); } return s; };
 const S = { pubs: [], st: { snap:null, marks:{}, cache:{}, rows:null, proj:'', grp:'', mode:'vendor', by:'' }, pur: {}, items: [], hist: [], sel: new Set(), shown: [], view: 'list', m: [] };
 
+let jsonpN = 0;
 function gviz(src){
   return new Promise((res, rej) => {
     const cb = '__gv' + (++jsonpN) + '_' + Date.now();
