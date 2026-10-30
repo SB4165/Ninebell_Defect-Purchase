@@ -390,7 +390,8 @@ async function loadNames(){
     if (ci < 0) throw new Error("명단 시트에서 '구매팀' 제목을 찾지 못했어요");
     const L = colL(ci), rows = await gviz({ gid: CONFIG.NAMES.gid, range: `${L}1:${L}500` });
     const seen = new Set(), out = [];
-    rows.slice(hr + 1).forEach(r => { const n = clean(r[0]); if (n && !CONFIG.NAMES.title.test(n) && !seen.has(n)) { seen.add(n); out.push(n); } });
+    const h2 = rows.findIndex(r => CONFIG.NAMES.title.test(clean(r[0]).replace(/\s/g,'')));   // 빈 줄을 건너뛰고 올 수 있어 열 안에서 제목 위치를 다시 찾음
+    rows.slice((h2 >= 0 ? h2 : hr) + 1).forEach(r => { const n = clean(r[0]); if (n && !CONFIG.NAMES.title.test(n) && !seen.has(n)) { seen.add(n); out.push(n); } });
     S.pubs = out; S.namesErr = '';
   } catch(e) { S.namesErr = e.message; }
   setStatus();
