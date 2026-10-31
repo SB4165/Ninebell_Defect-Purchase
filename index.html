@@ -255,6 +255,7 @@ select.rst{width:auto;font-size:12px;font-weight:600;padding:3px 6px;border-radi
 .applybar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--bd);padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:5}
 .sti .pn{font-size:14px;color:var(--fg);word-break:break-all;margin-top:-3px} .sti .pn span{color:var(--mut);font-size:12px;margin-right:6px}
 @media (max-width:760px){ .sti .pn{font-size:15px} }
+.sti .rd2 .ask{color:#cf222e} .sti .rd2 small{color:var(--mut);font-size:12px}
 .sti .rd{font-size:12.5px;color:#0969da;font-weight:600}
 table.pur{min-width:1180px}
 @media (max-width:760px){ .mc .mb2{grid-template-columns:1fr} .mc .mm{border-right:0;border-bottom:1px solid var(--bd2)} }
@@ -271,6 +272,7 @@ table.pur{min-width:1180px}
   <button type="button" data-tab="msg" class="on">메시지 반영</button>
   <button type="button" data-tab="stat">처리현황</button>
   <button type="button" data-tab="sync">시트 동기화<span class="badge" id="syncBadge" style="display:none"></span></button>
+  <button type="button" data-tab="req">개선요청<span class="badge" id="reqBadge" style="display:none"></span></button>
 </nav>
 <main id="tab-stat" style="display:none">
   <section class="box">
@@ -329,6 +331,27 @@ table.pur{min-width:1180px}
       <div class="lbar"><input class="hq" id="hQ" placeholder="No·작업·처리자·내용 검색"></div>
       <div class="twrap"><table class="led" style="min-width:760px"><thead><tr><th>일시</th><th>작업</th><th>No.</th><th>처리자</th><th>내용</th></tr></thead><tbody id="hBody"></tbody></table></div>
       <p class="mut" style="margin:8px 0 0">· 최근 1500건 · 보기는 비밀번호 없이 가능</p>
+    </div>
+  </section>
+</main>
+<main id="tab-req" style="display:none">
+  <section class="box">
+    <div class="box-h"><h2>개선요청</h2><span class="mut">구매팀 사이트를 쓰면서 불편한 점·바라는 기능을 남겨 주세요</span></div>
+    <div class="box-b">
+      <div class="rqform">
+        <label>작성자</label><div class="pubsel" id="rqAuthor"></div>
+        <label for="rqText">요청사항</label><textarea id="rqText" placeholder="입력 필요 (예: 대기 목록을 엑셀로 받고 싶어요)"></textarea>
+        <span></span><div><button class="btn pri" id="rqAdd">등록</button></div>
+      </div>
+    </div>
+  </section>
+  <section class="box">
+    <div class="box-h"><h2>요청 목록</h2><span class="mut" id="rqInfo">불러오는 중…</span><button class="btn sm" id="rqRefresh" style="margin-left:auto">새로고침</button></div>
+    <div class="box-b">
+      <div class="twrap"><table class="led rq"><thead><tr>
+        <th>No.</th><th>작성자</th><th>요청사항</th><th>검토사항</th><th>의견</th><th>관리</th>
+      </tr></thead><tbody id="rqBody"></tbody></table></div>
+      <p class="mut" style="margin:8px 0 0">· 요청 등록·수정·삭제는 누구나 · 검토사항과 의견은 관리자(품질팀)만 (비밀번호) · 15초마다 자동 새로고침</p>
     </div>
   </section>
 </main>
@@ -427,12 +450,13 @@ const msg = (title, body='') => modal({ title, body: body?`<p>${body}</p>`:'' })
 /* ================== 서버(Apps Script) 연결 ================== */
 async function api(action, data={}, needPw=false){
   if (needPw) {
-    let pw = sessionStorage.getItem('pur_pw');
+    const adm = needPw === 'admin', K = adm ? 'pur_admin_pw' : 'pur_pw';   // 개선요청 검토·의견 = 관리자(품질팀) 비밀번호, 그 밖 = 구매팀 비밀번호
+    let pw = sessionStorage.getItem(K);
     for (let tries = 0; tries < 3; tries++) {
-      if (!pw) { pw = await modal({ title:'비밀번호', body:'<p>시트 동기화·동기화 취소·대기 삭제는 구매팀 비밀번호가 필요해요.</p>', input:{type:'password', placeholder:'비밀번호'}, buttons:[{label:'취소', value:null},{label:'확인', value:true, cls:'pri'}] }); if (!pw) return null; }
+      if (!pw) { pw = await modal({ title: adm ? '관리자 비밀번호' : '비밀번호', body: adm ? '<p>검토사항·의견은 관리자(품질팀) 비밀번호가 필요해요.</p>' : '<p>시트 동기화·동기화 취소·대기 삭제는 구매팀 비밀번호가 필요해요.</p>', input:{type:'password', placeholder:'비밀번호'}, buttons:[{label:'취소', value:null},{label:'확인', value:true, cls:'pri'}] }); if (!pw) return null; }
       const r = await call(action, { ...data, pw });
-      if (r && r.error === 'badpw') { sessionStorage.removeItem('pur_pw'); pw = null; await msg('비밀번호가 틀렸어요', '비밀번호를 다시 확인해 주세요.'); continue; }
-      try { sessionStorage.setItem('pur_pw', pw); } catch(e){}
+      if (r && r.error === 'badpw') { sessionStorage.removeItem(K); pw = null; await msg('비밀번호가 틀렸어요', '비밀번호를 다시 확인해 주세요.'); continue; }
+      try { sessionStorage.setItem(K, pw); } catch(e){}
       return r;
     }
     return null;
@@ -440,6 +464,7 @@ async function api(action, data={}, needPw=false){
   return call(action, data);
 }
 async function call(action, data){
+  if (/^req/.test(action)) data = { ...data, board: 'pur' };   // 개선요청: 구매팀 전용 목록
   if (MOCK) return mockApi(action, JSON.parse(JSON.stringify(data)));
   const r = await fetch(CONFIG.API_URL, { method:'POST', body: JSON.stringify({ action, ...data }) });
   const j = await r.json();
@@ -461,6 +486,7 @@ function mockStatus(){
 }
 function mockApi(a, d){
   const db = MOCK_DB; if (!db.status) db.status = mockStatus();
+  db.status.rows.forEach(r => { r.d2 = r.date2 ? '2026.' + clean(r.date2).replace('/', '.') : ''; });   // 서버의 d2 흉내
   const rows = db.status.rows, row = no => rows.find(r => r.no === String(no)), lg = (a, no, by, t) => db.log.push({ t: Date.now(), a, no: String(no), by: by || '', d: t || '' });
   const info = r => r && { proj:r.proj, name:r.name, pn:r.pn, qty:r.qty, vendor:r.vendor, act:r.act, date:r.date, date2:r.date2, text:r.text, done:r.done };
   if (a === 'statusGet' || a === 'statusSync') { if (a === 'statusSync') db.status.at = Date.now(); const cnt = {}; rows.forEach(r => { const c = cnt[key(r.proj)] ||= [0,0]; c[0]++; if (!r.done && !db.marks[r.no]) c[1]++; }); const { rows: _, ...lite } = db.status; return { ok:true, snap:{ ...lite, nrows: rows.length, cnt }, marks: db.marks }; }
@@ -486,6 +512,13 @@ function mockApi(a, d){
       r.done = x.prev.done; r.date2 = x.prev.v; x.state = 'wait'; delete x.prev; res.restored++; lg('동기화 취소', no, d.by, '이전 값으로 되돌림'); });
     return res; }
   if (a === 'purDelete') { let n = 0; d.nos.forEach(no => { const x = db.pur[no]; if (!x || x.state !== 'wait') return; if (x.prev) { x.state = 'synced'; if (x.syncedRedate) x.redate = x.syncedRedate; } else { delete db.pur[no]; if (db.marks[no] && db.marks[no].team === 'pur') delete db.marks[no]; } n++; lg('삭제', no, d.by, ''); }); return { ok:true, deleted:n, marks: db.marks }; }
+  // 개선요청 (모의)
+  const rq = db.rq || (db.rq = { seq:0, items:[] });
+  if (a === 'reqList') return { ok:true, items: JSON.parse(JSON.stringify(rq.items)) };
+  if (a === 'reqAdd') { rq.seq++; rq.items.push({ id:'REQ-'+rq.seq, no:rq.seq, author:d.author, text:d.text, status:'검토', opinion:'', created:Date.now() }); return { ok:true }; }
+  if (a === 'reqUpdate') { const it = rq.items.find(x => x.id === d.id); it.author = d.author; it.text = d.text; return { ok:true }; }
+  if (a === 'reqDelete') { rq.items = rq.items.filter(x => x.id !== d.id); return { ok:true }; }
+  if (a === 'reqReview') { if (!d.pw || d.pw === 'x') return { ok:false, error:'badpw' }; const it = rq.items.find(x => x.id === d.id); if (d.status != null) it.status = d.status; if (d.opinion != null) it.opinion = d.opinion; return { ok:true }; }
   return { ok:false, error:'unknown action' };
 }
 
@@ -709,9 +742,9 @@ function stRender(){
     const btn = r.done ? '' : m ? `<button type="button" class="btn sm" data-stun="${esc(r.no)}">취소</button>` : `<button type="button" class="btn sm pri" data-stmk="${esc(r.no)}">처리완료</button>`;
     return `<div class="sti ${d ? 'done' : ''}">
       <div class="t1">${st}${r.act ? `<span class="act">${esc(r.act)}</span>` : ''}${btn}</div>
-      ${who ? `<div class="who">${who}</div>` : ''}${S.pur[r.no] ? `<div class="rd">재납일 ${esc(S.pur[r.no].redate)} · ${esc(PUR_ST[S.pur[r.no].state] || '')}</div>` : ''}
+      ${who ? `<div class="who">${who}</div>` : ''}
       <div class="nm">${esc(r.name || '(품명 없음)')}</div>
-      <div class="pn"><span>품번</span>${esc(r.pn || '-')}</div>
+      <div class="pn"><span>품번</span>${esc(r.pn || '-')}</div>${stRd(r)}
       <div class="df">${r.s ? `<span class="tg">${esc(r.s)}</span>` : ''}<span>${esc(r.text || '')}</span></div>
       <div class="mt">No ${esc(r.no)} · ${esc(r.date || '-')} · 귀책 ${esc(r.vendor || '-')} · 발견 ${esc(r.finder || '-')} · 담당 ${esc(r.owner || '-')}</div>
       ${r.ps ? `<div class="ps">비고 · ${esc(r.ps)}</div>` : ''}</div>`; };
@@ -887,6 +920,19 @@ $('#src').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey
 dateInput($('#redate'), () => { if (S.m.length) mRender(); });
 $('#mWho').addEventListener('click', e => { if (e.target.closest('[data-stwho]')) stChooseWorker(); });
 
+/* ---------- 처리현황 카드: 재납일/조치일 (시트 E열, 없으면 '업체문의 필요') ---------- */
+function stRd(r){
+  let v = clean(r.d2 != null ? r.d2 : r.date2);
+  if (r.d2 == null && v) {   // 서버가 아직 연도를 안 보낸 경우: ' 10/30' → 올해(6개월 넘게 앞이면 작년)
+    const m = v.match(/^(\d{1,2})\s*\/\s*(\d{1,2})$/);
+    if (m) { const t = new Date(); let y = t.getFullYear(); if (+m[1] > t.getMonth() + 7) y--; v = `${y}.${two(m[1])}.${two(m[2])}`; }
+  }
+  const p = S.pur[r.no];
+  const val = p && p.state === 'wait' ? `${esc(p.redate)} <small>(사이트 반영 · 동기화 대기)</small>`
+    : v ? esc(v) : '<b class="ask">업체문의 필요</b>';
+  return `<div class="pn rd2"><span>재납일/조치일</span>${val}</div>`;
+}
+
 /* ================== 구매팀: 시트 동기화 탭 ================== */
 function pRows(){
   const st = $('#pStat').value, q = key($('#pQ').value);
@@ -961,14 +1007,90 @@ $('#pRefresh').onclick = () => S.view === 'hist' ? hLoad() : purLoad().then(ok =
 let tabTimer = null;
 function showTab(t){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  ['stat','msg','sync'].forEach(k => $('#tab-' + k).style.display = t === k ? '' : 'none');
+  ['stat','msg','sync','req'].forEach(k => $('#tab-' + k).style.display = t === k ? '' : 'none');
   store.set('pur_tab', t); clearInterval(tabTimer);
   if (t === 'stat') { stLoad(); purLoad().then(() => stRender()); }
   if (t === 'msg') { stWhoRender(); if (!$('#redate').value) $('#redate').setDate(today()); }
+  if (t === 'req') { renderReqForm(); loadReq(); tabTimer = setInterval(() => { if (!document.hidden && !document.querySelector('.modal')) loadReq(); }, 15000); }
   if (t === 'sync') { setPView(S.view); tabTimer = setInterval(() => { if (!document.hidden && !document.querySelector('.modal') && S.view === 'list') purLoad().then(ok => ok && pRender()); }, 15000); }
 }
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
+
+/* ================== 개선요청 탭 ================== */
+const REQ_STATUS = ['검토', '작업중', '적용완료', '적용불가'];
+const REQ_OLD = { '개발중': '작업중' };   // 예전 이름 → 새 이름 (이미 등록된 요청도 새 이름으로 표시)
+const reqAuthors = () => (S.pubs || []).filter(n => !(CONFIG.REQ_EXCLUDE || []).includes(n));
+S.rq = []; S.rqAuthor = '';
+function renderReqForm(){
+  const list = reqAuthors();
+  $('#rqAuthor').className = 'pubsel actsel ' + (S.rqAuthor ? '' : 'need');
+  $('#rqAuthor').innerHTML = list.map(n => `<button type="button" class="ac${S.rqAuthor===n?' on':''}" data-rqa="${esc(n)}" style="background:#eef1f4">${esc(n)}</button>`).join('') || '<span class="mut">구매팀 명단 불러오는 중…</span>';
+  $('#rqText').classList.toggle('need', !clean($('#rqText').value));
+}
+$('#rqAuthor').addEventListener('click', e => { const b = e.target.closest('[data-rqa]'); if (!b) return; S.rqAuthor = b.dataset.rqa; renderReqForm(); });
+$('#rqText').addEventListener('input', () => $('#rqText').classList.toggle('need', !clean($('#rqText').value)));
+let rqBusy = false;
+async function loadReq(){
+  if (rqBusy) return; rqBusy = true;
+  try { const r = await api('reqList'); S.rq = (r.items || []).map(x => (REQ_OLD[x.status] ? Object.assign(x, { status: REQ_OLD[x.status] }) : x)).sort((a,b) => b.no - a.no); renderReq(); }
+  catch(e) { $('#rqInfo').textContent = '연결 안 됨: ' + e.message; }
+  finally { rqBusy = false; }
+}
+function renderReq(){
+  const cnt = k => S.rq.filter(x => x.status === k).length;
+  $('#rqInfo').textContent = `${S.rq.length}건 · ` + REQ_STATUS.map(k => `${k} ${cnt(k)}`).join(' · ') + ' · ' + new Date().toTimeString().slice(0,8) + ' 갱신';
+  const b = $('#reqBadge'), n = cnt('검토') + cnt('작업중'); b.style.display = n ? '' : 'none'; b.textContent = n;
+  if (!S.rq.length) { $('#rqBody').innerHTML = '<tr><td colspan="6" class="mut" style="padding:24px">아직 등록된 요청이 없어요.</td></tr>'; return; }
+  $('#rqBody').innerHTML = S.rq.map(x => { const si = Math.max(0, REQ_STATUS.indexOf(x.status));
+    return `<tr data-id="${esc(x.id)}"><td>${x.no}</td><td>${esc(x.author)}</td><td class="wrap">${esc(x.text)}</td>
+      <td><select class="rst s${si}" data-rst>${REQ_STATUS.map(k => `<option${k===x.status?' selected':''}>${k}</option>`).join('')}</select></td>
+      <td class="op">${x.opinion ? esc(x.opinion) : '<span class="mut">-</span>'}<div style="margin-top:4px"><button class="btn sm" data-rop>의견 ${x.opinion ? '수정' : '작성'}</button></div></td>
+      <td><button class="btn sm" data-red>수정</button> <button class="btn sm danger" data-rrm>삭제</button></td></tr>`; }).join('');
+}
+$('#rqRefresh').onclick = loadReq;
+$('#rqAdd').onclick = async () => {
+  const text = $('#rqText').value.trim();
+  if (!S.rqAuthor || !text) { renderReqForm(); return msg('비어 있는 칸이 있어요', `${[!S.rqAuthor && '작성자', !text && '요청사항'].filter(Boolean).join(', ')}을(를) 입력해 주세요.`); }
+  try { await api('reqAdd', { author: S.rqAuthor, text }); $('#rqText').value = ''; renderReqForm(); toast('개선요청을 등록했어요'); loadReq(); }
+  catch(e) { msg('등록하지 못했어요', esc(e.message)); }
+};
+function reqForm(title, x){
+  const body = `<div class="efrm"><label>작성자</label><select data-f="author">${[...new Set([x.author, ...reqAuthors()])].filter(Boolean).map(n => `<option${n===x.author?' selected':''}>${esc(n)}</option>`).join('')}</select>
+    <label>요청사항</label><textarea data-f="text" rows="5">${esc(x.text)}</textarea></div>`;
+  modal.onOpen = m => { modal.lastForm = m; };
+  return modal({ title, body, wide:true, buttons:[{label:'취소', value:false},{label:'저장', value:true, cls:'pri'}] }).then(ok => { const m = modal.lastForm; modal.onOpen = null; modal.lastForm = null;
+    return ok ? { author: m.querySelector('[data-f="author"]').value, text: m.querySelector('[data-f="text"]').value.trim() } : null; });
+}
+$('#rqBody').addEventListener('change', async e => {
+  const sel = e.target.closest('[data-rst]'); if (!sel) return;
+  const tr = sel.closest('tr'), x = S.rq.find(y => y.id === tr.dataset.id); if (!x) return;
+  try { const r = await api('reqReview', { id:x.id, status: sel.value }, 'admin');
+    if (r) { toast(`검토사항을 '${sel.value}'(으)로 바꿨어요`); } else sel.value = x.status;
+  } catch(err) { sel.value = x.status; msg('오류', esc(err.message)); }
+  loadReq();
+});
+$('#rqBody').addEventListener('click', async e => {
+  const tr = e.target.closest('tr[data-id]'); if (!tr) return; const x = S.rq.find(y => y.id === tr.dataset.id); if (!x) return;
+  try {
+    if (e.target.closest('[data-rrm]')) {
+      if (!await modal({ title:'이 요청을 삭제할까요?', body:`<p>${esc(x.text).slice(0,120)}</p>`, buttons:[{label:'취소', value:false},{label:'삭제', value:true, cls:'pri'}] })) return;
+      await api('reqDelete', { id:x.id }); toast('삭제했어요'); loadReq();
+    }
+    if (e.target.closest('[data-red]')) {
+      const f = await reqForm('개선요청 수정', x); if (!f) return;
+      if (!f.author || !f.text) return msg('비어 있는 칸이 있어요', '작성자와 요청사항을 입력해 주세요.');
+      await api('reqUpdate', { id:x.id, ...f }); toast('수정했어요'); loadReq();
+    }
+    if (e.target.closest('[data-rop]')) {
+      modal.onOpen = m => { modal.lastForm = m; };
+      const ok = await modal({ title:'관리자 의견', body:`<p class="mut">${esc(x.author)} · ${esc(x.text).slice(0,80)}</p><textarea data-f="op" rows="5" placeholder="검토 결과·반영 계획 등">${esc(x.opinion||'')}</textarea>`, wide:true, buttons:[{label:'취소', value:false},{label:'저장', value:true, cls:'pri'}] });
+      const m = modal.lastForm; modal.onOpen = null; modal.lastForm = null; if (!ok) return;
+      const r = await api('reqReview', { id:x.id, opinion: m.querySelector('[data-f="op"]').value.trim() }, 'admin');
+      if (r) { toast('의견을 저장했어요'); loadReq(); }
+    }
+  } catch(err) { msg('오류', esc(err.message)); }
+});
 
 /* ================== 웹앱 설치 ================== */
 const PWA = { prompt: null };
